@@ -1,0 +1,7 @@
+- name: install docker pre-reqs
+  apt:
+    state: installed
+    update_cache: yes
+    name:
+      - python2.7
+      - python-pip

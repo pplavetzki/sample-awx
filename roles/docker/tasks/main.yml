@@ -1,0 +1,116 @@
+---
+# tasks file for dockernode
+
+- name: check for get-pip.py
+  stat:
+    path: /var/tmp/get-pip.py
+  register: pypi
+
+- debug: var=pypi
+
+- name: check for pip
+  stat:
+    path: /usr/local/bin/pip
+  register: pip
+
+- debug: var=pip
+
+- name: check for python location
+  stat:
+    path: /usr/bin/python
+  register: python
+
+
+- debug: var=python
+  vars: { ansible_python_interpreter: "/usr/bin/python2" }
+
+- name: fetch get-pip.py
+  get_url:
+    url: https://bootstrap.pypa.io/get-pip.py
+    dest: /var/tmp/get-pip.py
+  when: pypi.stat.exists == False
+
+- name: install pip using python2
+  shell: python /var/tmp/get-pip.py
+  when: pip.stat.exists == False and python.stat.exists==True
+
+- name: install some pip packages
+  pip:
+    state: latest
+    name:
+      - docker-py
+
+- name: install docker pre-reqs
+  apt:
+    state: installed
+    update_cache: yes
+    name:
+      - linux-image-extra-{{ ansible_kernel }}
+      - linux-image-extra-virtual
+      - apt-transport-https
+      - ca-certificates
+      - curl
+      - software-properties-common
+
+- name: install repository key
+  shell: curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+
+# - name: ensure repository key is installed
+#   apt_key:
+#    id: "58118E89F3A912897C070ADBF76221572C52609D"
+#    keyserver: "hkp://p80.pool.sks-keyservers.net:80"
+#    state: present
+
+- name: create /etc/docker directory
+  file:
+    path: /etc/docker
+    state: directory
+    mode: 0755
+
+- name: create /etc/docker/daemon.json
+  template:
+    src: templates/docker.json
+    dest: /etc/docker/daemon.json
+    backup: yes
+    force: yes
+
+- name: ansible distribution release
+  debug:
+    msg:  "{{ansible_distribution_release}}"
+
+- name: ensure docker registry is available
+  apt_repository:
+    repo: 'deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable'
+    state: present
+
+- name: install Docker CE
+  apt:
+    state: installed
+    update_cache: yes
+    name:
+      - docker-ce
+
+# - name: ensure docker and dependencies are installed
+#   apt:
+#     update_cache: yes
+#     name: docker-ce
+#     state: present
+
+# To enable insecure registries with Docker, edit /templates/docker and re-run the playbook
+
+# - name: restart docker
+#   service:
+#     name: docker
+#     state: restarted
+
+- name: check for compose
+  stat:
+    path: /usr/local/bin/docker-compose
+  register: compose
+
+- name: Install docker compose
+  shell: curl -L https://github.com/docker/compose/releases/download/1.16.1/docker-compose-`uname -s`-`uname -m` -o /usr/local/bin/docker-compose
+  when: compose.stat.exists == False
+
+- name: Change file permissions
+  file: dest=/usr/local/bin/docker-compose mode=0755
